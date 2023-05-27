@@ -69,6 +69,12 @@ class Pointer(nn.Module):
         self.drop_hh = nn.Dropout(p=dropout)
 
     def forward(self, static_hidden, dynamic_hidden, decoder_hidden, last_hh):
+        """
+        @param static_hidden: (B,H,L)
+        @param dynamic_hidden: (B,H,L)
+        @param decoder_hidden: (B,H,1)
+        @param decoder_hidden: (1,B,H)
+        """
         rnn_out, last_hh = self.gru(decoder_hidden.transpose(2, 1), last_hh)
         rnn_out = rnn_out.squeeze(1)
 
