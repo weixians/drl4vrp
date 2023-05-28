@@ -6,6 +6,7 @@ from models.common import Encoder, Pointer
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 class DRL4TSP(nn.Module):
     """Defines the main Encoder, Decoder, and Pointer combinatorial models.
 
@@ -102,8 +103,9 @@ class DRL4TSP(nn.Module):
                 break
 
             # ... but compute a hidden rep for each element added to sequence
+            # (B,H,1)
             decoder_hidden = self.decoder(decoder_input)
-
+            # (B,L)
             probs, last_hh = self.pointer(static_hidden, dynamic_hidden, decoder_hidden, last_hh)
             probs = F.softmax(probs + mask.log(), dim=1)
 
@@ -114,6 +116,7 @@ class DRL4TSP(nn.Module):
 
                 # Sometimes an issue with Categorical & sampling on GPU; See:
                 # https://github.com/pemami4911/neural-combinatorial-rl-pytorch/issues/5
+                # 为每个sample采样action
                 ptr = m.sample()
                 while not torch.gather(mask, 1, ptr.data.unsqueeze(1)).byte().all():
                     ptr = m.sample()
@@ -124,16 +127,18 @@ class DRL4TSP(nn.Module):
 
             # After visiting a node update the dynamic representation
             if self.update_fn is not None:
+                # 更新动态特征
                 dynamic = self.update_fn(dynamic, ptr.data)
+                # 重新encode动态特征
                 dynamic_hidden = self.dynamic_encoder(dynamic)
 
                 # Since we compute the VRP in minibatches, some tours may have
                 # number of stops. We force the vehicles to remain at the depot
                 # in these cases, and logp := 0
-                is_done = dynamic[:, 1].sum(1).eq(0).float()
+                is_done = dynamic[:, 1].sum(1).eq(0).float()  # 判断是否全部调度完毕
                 logp = logp * (1.0 - is_done)
 
-            # And update the mask so we don't re-visit if we don't need to
+            # 更新mask函数：update the mask so we don't re-visit if we don't need to
             if self.mask_fn is not None:
                 mask = self.mask_fn(mask, dynamic, ptr.data).detach()
 

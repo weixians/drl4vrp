@@ -7,7 +7,7 @@ from models.critic import StateCritic
 from trainer import device, train, validate
 
 
-def train_tsp(args):
+def run_tsp(args):
     # Goals from paper:
     # TSP20, 3.97
     # TSP50, 6.08
@@ -55,7 +55,7 @@ def train_tsp(args):
     print("Average tour length: ", out)
 
 
-def train_vrp(args):
+def run_vrp(args):
     # Goals from paper:
     # VRP10, Capacity 20:  4.84  (Greedy)
     # VRP20, Capacity 30:  6.59  (Greedy)
@@ -138,8 +138,8 @@ if __name__ == "__main__":
     # print(args.checkpoint)
 
     if args.task == "tsp":
-        train_tsp(args)
+        run_tsp(args)
     elif args.task == "vrp":
-        train_vrp(args)
+        run_vrp(args)
     else:
         raise ValueError("Task <%s> not understood" % args.task)

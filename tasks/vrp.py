@@ -35,7 +35,7 @@ class VehicleRoutingDataset(Dataset):
 
         # Depot location will be the first node in each
         locations = torch.rand((num_samples, 2, input_size + 1))
-        # (N,2,sequence_length)
+        # (N,2,L)
         self.static = locations
 
         # All states will broadcast the drivers current load
@@ -51,7 +51,7 @@ class VehicleRoutingDataset(Dataset):
         demands = demands / float(max_load)
 
         demands[:, 0, 0] = 0  # depot starts with a demand of 0
-        # (N,2,sequence_length)
+        # (N,2,L)
         self.dynamic = torch.tensor(np.concatenate((loads, demands), axis=1))
 
     def __len__(self):
@@ -59,10 +59,12 @@ class VehicleRoutingDataset(Dataset):
 
     def __getitem__(self, idx):
         # (static, dynamic, start_loc)
+        # (2,L), (2,L), (2,1)
         return (self.static[idx], self.dynamic[idx], self.static[idx, :, 0:1])
 
     def update_mask(self, mask, dynamic, chosen_idx=None):
         """Updates the mask used to hide non-valid states.
+        更新mask来避免选到那些不符合条件的选项
 
         Parameters
         ----------
@@ -70,15 +72,18 @@ class VehicleRoutingDataset(Dataset):
         """
 
         # Convert floating point to integers for calculations
+        # loads对每个位置的值都一样，但是demand表示每个
         loads = dynamic.data[:, 0]  # (batch_size, seq_len)
         demands = dynamic.data[:, 1]  # (batch_size, seq_len)
 
         # If there is no positive demand left, we can end the tour.
         # Note that the first node is the depot, which always has a negative demand
         if demands.eq(0).all():
+            # 如果所有的客户都满足了，mask的每个位置都置为0
             return demands * 0.0
 
         # Otherwise, we can choose to go anywhere where demand is > 0
+        # 过滤掉 demand==0 或者 load小于demand的客户
         new_mask = demands.ne(0) * demands.lt(loads)
 
         # We should avoid traveling to the depot back-to-back
@@ -118,18 +123,24 @@ class VehicleRoutingDataset(Dataset):
         # Across the minibatch - if we've chosen to visit a city, try to satisfy
         # as much demand as possible
         if visit.any():
+            # load扣除当前访问节点的demand
             new_load = torch.clamp(load - demand, min=0)
+            # 计算当前客户的剩余demand，由于mask设置了可访问节点的demand不大于load，因此这里送货到的客户剩余demand均为0
             new_demand = torch.clamp(demand - load, min=0)
 
             # Broadcast the load to all nodes, but update demand seperately
             visit_idx = visit.nonzero().squeeze()
 
+            # 更新所有节点的load
             all_loads[visit_idx] = new_load[visit_idx]
+            # 更新对应客户的剩余demand
             all_demands[visit_idx, chosen_idx[visit_idx]] = new_demand[visit_idx].view(-1)
+            # 更新depot节点的demand -1~0
             all_demands[visit_idx, 0] = -1.0 + new_load[visit_idx].view(-1)
 
         # Return to depot to fill vehicle load
         if depot.any():
+            # 将回到仓库装货的sample所有节点的load置为1，并将仓库的demand重新置为0
             all_loads[depot.nonzero().squeeze()] = 1.0
             all_demands[depot.nonzero().squeeze(), 0] = 0.0
 
@@ -154,8 +165,9 @@ def reward(static, tour_indices):
 
     # Euclidean distance between each consecutive point
     tour_len = torch.sqrt(torch.sum(torch.pow(y[:, :-1] - y[:, 1:], 2), dim=2))
+    sum_tour_len = tour_len.sum(1)
 
-    return tour_len.sum(1)
+    return sum_tour_len
 
 
 def render(static, tour_indices, save_path):
