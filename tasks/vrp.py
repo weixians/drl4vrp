@@ -83,24 +83,31 @@ class VehicleRoutingDataset(Dataset):
             return demands * 0.0
 
         # Otherwise, we can choose to go anywhere where demand is > 0
-        # 过滤掉 demand==0 或者 load小于demand的客户
+        # 过滤掉 demand==0 或者 load小于demand的客户 (第1和3点)
         new_mask = demands.ne(0) * demands.lt(loads)
 
         # We should avoid traveling to the depot back-to-back
+
+        # 为了避免从deport又回到deport，先得到当前不在deport的sample
         repeat_home = chosen_idx.ne(0)
         repeat_home = repeat_home.to(dtype=torch.int32)
-
+        # 如果包含不在deport的sample
         if repeat_home.any():
+            # 将不在deport的sample回到deport
             new_mask[repeat_home.nonzero(), 0] = 1.0
         if (1 - repeat_home).any():
+            # 不允许已经在deport的sample下一步仍然选择deport
             new_mask[(1 - repeat_home).nonzero(), 0] = 0.0
 
         # ... unless we're waiting for all other samples in a minibatch to finish
+        # 判断每个sample当前的load是否为0
         has_no_load = loads[:, 0].eq(0).float()
+        # 判读每个sample中所有客户的需求是否为0
         has_no_demand = demands[:, 1:].sum(1).eq(0).float()
-
+        # 没有load 或者 所有客户都没有demand（已经结束）     ---  第2点
         combined = (has_no_load + has_no_demand).gt(0)
         if combined.any():
+            # 此时只能回到仓库
             new_mask[combined.nonzero(), 0] = 1.0
             new_mask[combined.nonzero(), 1:] = 0.0
 

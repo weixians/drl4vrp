@@ -99,7 +99,7 @@ class Pointer(nn.Module):
 
         # Given a summary of the output, find an  input context
         # (B,1,L)
-        enc_attn = self.encoder_attn(static_hidden, dynamic_hidden, rnn_out)
+        enc_attn = self.encoder_attn(static_hidden, dynamic_hidden, rnn_out)  # 得到每个节点的注意力权重
         # (B,1,H) = (B,1,L)@(B,L,H)：attention加权和所有特征
         context = enc_attn.bmm(static_hidden.permute(0, 2, 1))  # (B, 1, num_feats)
 
